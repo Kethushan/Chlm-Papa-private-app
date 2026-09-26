@@ -1,3 +1,54 @@
+name: Unzip and Build Papa Chlm APKs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find and unzip project
+        run: |
+          set -e
+
+          ZIP=$(find . -maxdepth 2 -type f -name "PapaChlmLoveApps.zip" | head -1)
+
+          if [ -z "$ZIP" ]; then
+            echo "PapaChlmLoveApps.zip not found"
+            exit 1
+          fi
+
+          echo "Found: $ZIP"
+
+          rm -rf build-project
+          mkdir build-project
+
+          unzip -q "$ZIP" -d build-project
+
+          PROJECT=$(find build-project -name settings.gradle -o -name settings.gradle.kts | head -1 | xargs dirname)
+
+          echo "Project: $PROJECT"
+
+          cd "$PROJECT"
+
+          echo "=== Project files ==="
+          ls -la
+
+          echo "=== Building APKs ==="
+
+          chmod +x gradlew 2>/dev/null || true
+
+          if [ -f "./gradlew" ]; then
+            ./gradlew assemblePapaRelease assembleChlmRelease
+          else
+            gradle wrapper --gradle-version 8.10
+            ./gradlew assemblePapaRelease assembleChlmRelease
+          fi
+
       - name: Show generated APKs
         run: |
           echo "Searching for APK files..."
