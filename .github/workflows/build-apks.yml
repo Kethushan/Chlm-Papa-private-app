@@ -1,0 +1,82 @@
+name: Build Papa and Chlm APKs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Find and unzip project
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          ZIP="$(find . -type f -name 'PapaChlmLoveApps.zip' -print -quit)"
+
+          test -n "$ZIP"
+
+          rm -rf project
+          mkdir project
+
+          unzip -q "$ZIP" -d project
+
+          PROJECT_DIR="$(find project -type f -name 'settings.gradle' -print -quit | xargs -r dirname)"
+
+          test -n "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Project directory: $PROJECT_DIR"
+
+          find "$PROJECT_DIR" -maxdepth 2 -type f -print
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+
+      - name: Build both release APKs
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cd "$PROJECT_DIR"
+
+          gradle --no-daemon clean assemblePapaRelease assembleChlmRelease
+
+      - name: Collect APK files
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          rm -rf artifacts
+          mkdir artifacts
+
+          echo "Searching for APK files..."
+
+          find "$PROJECT_DIR" -type f -name '*.apk' -print
+
+          find "$PROJECT_DIR" -type f -name '*.apk' -exec cp {} artifacts/ \;
+
+          echo "Collected files:"
+          ls -lah artifacts
+
+          test "$(find artifacts -maxdepth 1 -type f -name '*.apk' | wc -l)" -ge 2
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: Papa-Chlm-APKs
+          path: artifacts/*.apk
+          if-no-files-found: error
